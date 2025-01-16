@@ -2,25 +2,14 @@ import { Context, Hono } from "hono";
 
 const app = new Hono();
 
-// Mastodonのエイリアス
+// Mastodonエイリアス
 const MASTODON_ALIASES: Record<string, string> = {
   "@puzakura@puzakura.com": "@dampuzakura@fedibird.com",
 };
 
-const parseAlias = (alias: string) => {
-  const match = alias.match(/^@(?<targetHandle>[^@]+)@(?<targetInstance>[^@]+)$/);
-  if (!match?.groups) return null;
-  return match.groups;
-};
-
-const getAliasData = (handle: string, instance: string) => {
+const getMastodonAliasInfo = (handle: string, instance: string) => {
   const alias = MASTODON_ALIASES[`@${handle}@${instance}`];
-  if (!alias) return null;
-  return parseAlias(alias);
-};
-
-const buildRedirectUrl = (targetHandle: string, targetInstance: string) => {
-  return `https://${targetInstance}/@${targetHandle}`;
+  return alias && alias.match(/^@(?<handle>[^@]+)@(?<instance>[^@]+)$/)?.groups;
 };
 
 app.get("/.well-known/webfinger", (c: Context) => {
@@ -30,19 +19,19 @@ app.get("/.well-known/webfinger", (c: Context) => {
   }
 
   const resourceMatch = resource.match(
-    /^(acct:(?<requestedHandle>[^@]+)@(?<requestedInstance>[^@]+)|https?:\/\/(?<requestedInstance>[^\/]+)\/(@(?<requestedHandle>[^\/]+)|users\/(?<requestedHandle>[^\/]+)))$/,
+    /^(acct:(?<handle>[^@]+)@(?<instance>[^@]+)|https?:\/\/(?<instance>[^\/]+)\/(@(?<handle>[^\/]+)|users\/(?<handle>[^\/]+)))$/,
   );
   if (!resourceMatch?.groups) {
     return c.json({ error: "invalid resource format" }, 400);
   }
 
-  const { requestedHandle, requestedInstance } = resourceMatch.groups;
-  const aliasData = getAliasData(requestedHandle, requestedInstance);
-  if (!aliasData) {
+  const { handle, instance } = resourceMatch.groups;
+  const aliasInfo = getMastodonAliasInfo(handle, instance);
+  if (!aliasInfo) {
     return c.json({ error: "Not Found" }, 404);
   }
 
-  const { targetHandle, targetInstance } = aliasData;
+  const { handle: targetHandle, instance: targetInstance } = aliasInfo;
 
   return c.json({
     subject: `acct:${targetHandle}@${targetInstance}`,
@@ -69,17 +58,17 @@ app.get("/.well-known/webfinger", (c: Context) => {
   });
 });
 
-const handleRedirect = (c: Context, handle: string) => {
+const redirectMastodonUser = (c: Context, handle: string) => {
   const instance = c.req.header("Host");
   if (!instance) {
     return c.json({ error: "Host header is required" }, 400);
   }
-  const aliasData = getAliasData(handle, instance);
-  if (!aliasData) {
+  const aliasInfo = getMastodonAliasInfo(handle, instance);
+  if (!aliasInfo) {
     return c.json({ error: "Not Found" }, 404);
   }
-  const { targetHandle, targetInstance } = aliasData;
-  return c.redirect(buildRedirectUrl(targetHandle, targetInstance), 308);
+  const { handle: targetHandle, instance: targetInstance } = aliasInfo;
+  return c.redirect(`https://${targetInstance}/@${targetHandle}`, 308);
 };
 
 app.get("/:path", (c: Context) => {
@@ -89,12 +78,12 @@ app.get("/:path", (c: Context) => {
     return c.json({ error: "invalid path format" }, 400);
   }
   const { handle } = pathMatch.groups;
-  return handleRedirect(c, handle);
+  return redirectMastodonUser(c, handle);
 });
 
 app.get("/users/:handle", (c: Context) => {
   const { handle } = c.req.param();
-  return handleRedirect(c, handle);
+  return redirectMastodonUser(c, handle);
 });
 
 app.onError((error: Context, c: Context) => {
