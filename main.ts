@@ -61,6 +61,58 @@ app.get("/.well-known/webfinger", (c: Context) => {
   });
 });
 
+app.get("/:path", (c: Context) => {
+  const { path } = c.req.param();
+
+  const pathMatch = path.match(/^@(?<handle>[^@]+)$/);
+  if (!pathMatch?.groups) {
+    return c.json({ error: "invalid path format" }, 400);
+  }
+
+  const { handle } = pathMatch.groups;
+
+  const instance = c.req.header("Host");
+
+  const alias = MASTODON_ALIASES[`@${handle}@${instance}`];
+  if (!alias) {
+    return c.json({ error: "Not Found" }, 404);
+  }
+
+  const aliasMatch = alias.match(
+    /^@(?<resHandle>[^@]+)@(?<resInstance>[^@]+)$/,
+  );
+  if (!aliasMatch?.groups) {
+    return c.json({ error: "invalid alias format" }, 500);
+  }
+
+  const { resHandle, resInstance } = aliasMatch.groups;
+
+  return c.redirect(`https://${resInstance}/@${resHandle}`,308);
+});
+
+app.get("/users/:handle", (c: Context) => {
+  const { handle } = c.req.param();
+
+  const instance = c.req.header("Host");
+  console.log(handle, instance);
+
+  const alias = MASTODON_ALIASES[`@${handle}@${instance}`];
+  if (!alias) {
+    return c.json({ error: "Not Found" }, 404);
+  }
+
+  const aliasMatch = alias.match(
+    /^@(?<resHandle>[^@]+)@(?<resInstance>[^@]+)$/,
+  );
+  if (!aliasMatch?.groups) {
+    return c.json({ error: "invalid alias format" }, 500);
+  }
+
+  const { resHandle, resInstance } = aliasMatch.groups;
+
+  return c.redirect(`https://${resInstance}/@${resHandle}`,308);
+});
+
 app.onError((err: Context, c: Context) => {
   console.error(err);
   return c.json({ error: "Internal Server Error" }, 500);
