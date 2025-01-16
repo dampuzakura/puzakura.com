@@ -14,7 +14,7 @@ app.get("/.well-known/webfinger", (c: Context) => {
   }
 
   const acctMatch = resource.match(
-    /^acct:(?<reqHandle>[^@]+)@(?<reqInstance>[^@]+)$/,
+    /^(acct:(?<reqHandle>[^@]+)@(?<reqInstance>[^@]+)|https?:\/\/(?<reqInstance>[^\/]+)\/(@(?<reqHandle>[^\/]+)|users\/(?<reqHandle>[^\/]+)))$/,
   );
   if (!acctMatch?.groups) {
     return c.json({ error: "invalid resource format" }, 400);
@@ -37,7 +37,7 @@ app.get("/.well-known/webfinger", (c: Context) => {
   const { resHandle, resInstance } = aliasMatch.groups;
 
   return c.json({
-    subject: resource,
+    subject: `acct:${resHandle}@${resInstance}`,
     aliases: [
       `https://${resInstance}/@${resHandle}`,
       `https://${resInstance}/users/${resHandle}`,
