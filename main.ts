@@ -94,7 +94,6 @@ app.get("/users/:handle", (c: Context) => {
   const { handle } = c.req.param();
 
   const instance = c.req.header("Host");
-  console.log(handle, instance);
 
   const alias = MASTODON_ALIASES[`@${handle}@${instance}`];
   if (!alias) {
