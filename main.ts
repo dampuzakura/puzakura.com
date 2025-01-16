@@ -7,113 +7,98 @@ const MASTODON_ALIASES: Record<string, string> = {
   "@puzakura@puzakura.com": "@dampuzakura@fedibird.com",
 };
 
+const parseAlias = (alias: string) => {
+  const match = alias.match(/^@(?<targetHandle>[^@]+)@(?<targetInstance>[^@]+)$/);
+  if (!match?.groups) return null;
+  return match.groups;
+};
+
+const getAliasData = (handle: string, instance: string) => {
+  const alias = MASTODON_ALIASES[`@${handle}@${instance}`];
+  if (!alias) return null;
+  return parseAlias(alias);
+};
+
+const buildRedirectUrl = (targetHandle: string, targetInstance: string) => {
+  return `https://${targetInstance}/@${targetHandle}`;
+};
+
 app.get("/.well-known/webfinger", (c: Context) => {
   const { resource } = c.req.query();
   if (!resource) {
     return c.json({ error: "resource query is required" }, 400);
   }
 
-  const acctMatch = resource.match(
-    /^(acct:(?<reqHandle>[^@]+)@(?<reqInstance>[^@]+)|https?:\/\/(?<reqInstance>[^\/]+)\/(@(?<reqHandle>[^\/]+)|users\/(?<reqHandle>[^\/]+)))$/,
+  const resourceMatch = resource.match(
+    /^(acct:(?<requestedHandle>[^@]+)@(?<requestedInstance>[^@]+)|https?:\/\/(?<requestedInstance>[^\/]+)\/(@(?<requestedHandle>[^\/]+)|users\/(?<requestedHandle>[^\/]+)))$/,
   );
-  if (!acctMatch?.groups) {
+  if (!resourceMatch?.groups) {
     return c.json({ error: "invalid resource format" }, 400);
   }
 
-  const { reqHandle, reqInstance } = acctMatch.groups;
-
-  const alias = MASTODON_ALIASES[`@${reqHandle}@${reqInstance}`];
-  if (!alias) {
+  const { requestedHandle, requestedInstance } = resourceMatch.groups;
+  const aliasData = getAliasData(requestedHandle, requestedInstance);
+  if (!aliasData) {
     return c.json({ error: "Not Found" }, 404);
   }
 
-  const aliasMatch = alias.match(
-    /^@(?<resHandle>[^@]+)@(?<resInstance>[^@]+)$/,
-  );
-  if (!aliasMatch?.groups) {
-    return c.json({ error: "invalid alias format" }, 500);
-  }
-
-  const { resHandle, resInstance } = aliasMatch.groups;
+  const { targetHandle, targetInstance } = aliasData;
 
   return c.json({
-    subject: `acct:${resHandle}@${resInstance}`,
+    subject: `acct:${targetHandle}@${targetInstance}`,
     aliases: [
-      `https://${resInstance}/@${resHandle}`,
-      `https://${resInstance}/users/${resHandle}`,
+      `https://${targetInstance}/@${targetHandle}`,
+      `https://${targetInstance}/users/${targetHandle}`,
     ],
     links: [
       {
         rel: "http://webfinger.net/rel/profile-page",
         type: "text/html",
-        href: `https://${resInstance}/@${resHandle}`,
+        href: `https://${targetInstance}/@${targetHandle}`,
       },
       {
         rel: "self",
         type: "application/activity+json",
-        href: `https://${resInstance}/users/${resHandle}`,
+        href: `https://${targetInstance}/users/${targetHandle}`,
       },
       {
         rel: "http://ostatus.org/schema/1.0/subscribe",
-        template: `https://${resInstance}/authorize_interaction?uri={uri}`,
+        template: `https://${targetInstance}/authorize_interaction?uri={uri}`,
       },
     ],
   });
 });
 
+const handleRedirect = (c: Context, handle: string) => {
+  const instance = c.req.header("Host");
+  if (!instance) {
+    return c.json({ error: "Host header is required" }, 400);
+  }
+  const aliasData = getAliasData(handle, instance);
+  if (!aliasData) {
+    return c.json({ error: "Not Found" }, 404);
+  }
+  const { targetHandle, targetInstance } = aliasData;
+  return c.redirect(buildRedirectUrl(targetHandle, targetInstance), 308);
+};
+
 app.get("/:path", (c: Context) => {
   const { path } = c.req.param();
-
   const pathMatch = path.match(/^@(?<handle>[^@]+)$/);
   if (!pathMatch?.groups) {
     return c.json({ error: "invalid path format" }, 400);
   }
-
   const { handle } = pathMatch.groups;
-
-  const instance = c.req.header("Host");
-
-  const alias = MASTODON_ALIASES[`@${handle}@${instance}`];
-  if (!alias) {
-    return c.json({ error: "Not Found" }, 404);
-  }
-
-  const aliasMatch = alias.match(
-    /^@(?<resHandle>[^@]+)@(?<resInstance>[^@]+)$/,
-  );
-  if (!aliasMatch?.groups) {
-    return c.json({ error: "invalid alias format" }, 500);
-  }
-
-  const { resHandle, resInstance } = aliasMatch.groups;
-
-  return c.redirect(`https://${resInstance}/@${resHandle}`,308);
+  return handleRedirect(c, handle);
 });
 
 app.get("/users/:handle", (c: Context) => {
   const { handle } = c.req.param();
-
-  const instance = c.req.header("Host");
-
-  const alias = MASTODON_ALIASES[`@${handle}@${instance}`];
-  if (!alias) {
-    return c.json({ error: "Not Found" }, 404);
-  }
-
-  const aliasMatch = alias.match(
-    /^@(?<resHandle>[^@]+)@(?<resInstance>[^@]+)$/,
-  );
-  if (!aliasMatch?.groups) {
-    return c.json({ error: "invalid alias format" }, 500);
-  }
-
-  const { resHandle, resInstance } = aliasMatch.groups;
-
-  return c.redirect(`https://${resInstance}/@${resHandle}`,308);
+  return handleRedirect(c, handle);
 });
 
-app.onError((err: Context, c: Context) => {
-  console.error(err);
+app.onError((error: Context, c: Context) => {
+  console.error(error);
   return c.json({ error: "Internal Server Error" }, 500);
 });
 
