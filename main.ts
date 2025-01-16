@@ -3,7 +3,6 @@ import { Context, Hono } from "hono";
 const app = new Hono();
 
 // Mastodonのエイリアス
-
 const MASTODON_ALIASES: Record<string, string> = {
   "@puzakura@puzakura.com": "@dampuzakura@fedibird.com",
 };
@@ -14,8 +13,6 @@ app.get("/.well-known/webfinger", (c: Context) => {
     return c.json({ error: "resource query is required" }, 400);
   }
 
-  console.log("resource:", resource);
-
   const acctMatch = resource.match(
     /^acct:(?<reqHandle>[^@]+)@(?<reqInstance>[^@]+)$/,
   );
@@ -23,7 +20,6 @@ app.get("/.well-known/webfinger", (c: Context) => {
     return c.json({ error: "invalid resource format" }, 400);
   }
 
-  console.log("acctMatch:", acctMatch);
   const { reqHandle, reqInstance } = acctMatch.groups;
 
   const alias = MASTODON_ALIASES[`@${reqHandle}@${reqInstance}`];
