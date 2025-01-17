@@ -83,7 +83,7 @@ const BLUESKY_DIDS: Record<string, string> = {
 
 const getBlueskyDidInfo = (handle: string) => {
   const did = BLUESKY_DIDS[`@${handle}`];
-  return did && did.match(/^(?<handle>did:plc:[^@]+)$/)?.groups;
+  return did && did.match(/^(?<did>did:plc:[^@]+)$/)?.groups;
 };
 
 app.get("/.well-known/atproto-did", (c: Context) => {
