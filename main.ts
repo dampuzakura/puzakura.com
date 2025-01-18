@@ -114,10 +114,19 @@ const redirectBlueskyUser = (c: Context) => {
   return c.redirect(`https://bsky.app/profile/${targetDid}`, 308);
 };
 
+// Xエイリアス
+const X_ALIAS = "puzakura";
+
+const redirectXUser = (c: Context) => {
+  return c.redirect(`https://x.com/${X_ALIAS}`, 308);
+}
+
 app.get("/:path", (c: Context) => {
   const { path } = c.req.param();
   if (path === "bluesky") {
     return redirectBlueskyUser(c);
+  } else if (path === "x") {
+    return redirectXUser(c);
   }
   const pathMatch = path.match(/^@(?<handle>[^@]+)$/);
   if (!pathMatch?.groups) {
